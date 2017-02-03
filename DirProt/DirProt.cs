@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
@@ -10,11 +11,10 @@ namespace DirProt {
         private static readonly string AppDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) +
                                          Path.DirectorySeparatorChar;
 
-        public DirProt() {
-            ConfigManager configManager = new ConfigManager();
-            Config config = configManager.LoadConfig(AppDir + "config.json");
-            List<DirPath> directorys = configManager.LoadDirTable(AppDir + "data" + Path.DirectorySeparatorChar + "dirtable.json").Directorys;
-            if (config.Enabled) {
+        public DirProt(bool backup) {
+            Config config = ConfigManager.LoadConfig(AppDir + "config.json");
+            List<DirPath> directorys = ConfigManager.LoadDirTable(AppDir + "data" + Path.DirectorySeparatorChar + "dirtable.json").Directorys;
+            if (config.Enabled || backup) {
                 foreach (string iPath in config.ProtectedDir) {
                     string path = iPath.ToLower();
                     bool isBackuped = false;
@@ -37,7 +37,7 @@ namespace DirProt {
                         Backup(path, directorys);
                     }
                 }
-                configManager.SaveDirectorys(directorys, AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + "dirtable.json");
+                ConfigManager.SaveDirectorys(directorys, AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + "dirtable.json");
             }
         }
 
@@ -96,7 +96,7 @@ namespace DirProt {
             }
         }
 
-        private void DeleteReadOnly(FileSystemInfo fileSystemInfo) {
+        private static void DeleteReadOnly(FileSystemInfo fileSystemInfo) {
             var directoryInfo = fileSystemInfo as DirectoryInfo;
             if (directoryInfo != null && directoryInfo.Exists) {
                 foreach (FileSystemInfo childInfo in directoryInfo.GetFileSystemInfos()) {
@@ -113,7 +113,29 @@ namespace DirProt {
         }
 
         static void Main(string[] args) {
-            new DirProt();
+            if (args.Length == 1) {
+                if (args[0].ToLower().Equals("/install")) {
+                    Process.Start("schtasks", "/Create /SC ONSTART /TN \"DirProt\" /TR \"" + Assembly.GetExecutingAssembly().Location + "\" /RU " + "SYSTEM" + " /RL HIGHEST");
+                } else if (args[0].ToLower().Equals("/uninstall")) {
+                    Process.Start("schtasks", "/Delete /F /TN \"Symon Client\"");
+                } else if (args[0].ToLower().Equals("/backup")) {
+                    DirectoryInfo dataDir = new DirectoryInfo(AppDir + "data");
+                    if (dataDir.Exists) {
+                        DeleteReadOnly(dataDir);
+                    }
+                    new DirProt(true);
+                } else if (args[0].ToLower().Equals("/enable")) {
+                    Config config = ConfigManager.LoadConfig(AppDir + "config.json");
+                    config.Enabled = true;
+                    ConfigManager.SaveConfig(config, AppDir + "config.json");
+                } else if (args[0].ToLower().Equals("/disable")) {
+                    Config config = ConfigManager.LoadConfig(AppDir + "config.json");
+                    config.Enabled = false;
+                    ConfigManager.SaveConfig(config, AppDir + "config.json");
+                }
+            } else {
+                new DirProt(false);
+            }
         }
     }
 }

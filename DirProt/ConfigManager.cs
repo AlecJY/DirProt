@@ -5,7 +5,7 @@ using Newtonsoft.Json;
 
 namespace DirProt {
     public class ConfigManager {
-        public Config LoadConfig(string filename) {
+        public static Config LoadConfig(string filename) {
             string jsonString = "";
             try {
                 jsonString = File.ReadAllText(filename);
@@ -23,7 +23,16 @@ namespace DirProt {
             }
         }
 
-        public DirTable LoadDirTable(string filename) {
+        public static void SaveConfig(Config config, string filename) {
+            string jsonString = JsonConvert.SerializeObject(config, Formatting.Indented);
+            try {
+                File.WriteAllText(filename, jsonString);
+            } catch (Exception e) {
+                Console.Error.WriteLine(e);
+            }
+        }
+
+        public static DirTable LoadDirTable(string filename) {
             string jsonString = "";
             try {
                 jsonString = File.ReadAllText(filename);
@@ -45,7 +54,7 @@ namespace DirProt {
             }
         }
 
-        public void SaveDirectorys(List<DirPath> directorys, string path) {
+        public static void SaveDirectorys(List<DirPath> directorys, string path) {
             DirTable dirTable = new DirTable();
             dirTable.Directorys = directorys;
             string jsonString = JsonConvert.SerializeObject(dirTable, Formatting.Indented);
