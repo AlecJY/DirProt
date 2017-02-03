@@ -48,7 +48,7 @@ namespace DirProt {
         public void SaveDirectorys(List<DirPath> directorys, string path) {
             DirTable dirTable = new DirTable();
             dirTable.Directorys = directorys;
-            string jsonString = JsonConvert.SerializeObject(dirTable);
+            string jsonString = JsonConvert.SerializeObject(dirTable, Formatting.Indented);
             try {
                 File.WriteAllText(path, jsonString);
             }

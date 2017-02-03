@@ -15,7 +15,8 @@ namespace DirProt {
             Config config = configManager.LoadConfig(AppDir + "config.json");
             List<DirPath> directorys = configManager.LoadDirTable(AppDir + "data" + Path.DirectorySeparatorChar + "dirtable.json").Directorys;
             if (config.Enabled) {
-                foreach (string path in config.ProtectedDir) {
+                foreach (string iPath in config.ProtectedDir) {
+                    string path = iPath.ToLower();
                     bool isBackuped = false;
                     DirPath backupDir = null;
                     foreach (DirPath directory in directorys) {
