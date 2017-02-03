@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using Microsoft.Win32;
 using Newtonsoft.Json;
 
 namespace DirProt {
@@ -54,9 +55,7 @@ namespace DirProt {
             }
         }
 
-        public static void SaveDirectorys(List<DirPath> directorys, string path) {
-            DirTable dirTable = new DirTable();
-            dirTable.Directorys = directorys;
+        public static void SaveDirTable(DirTable dirTable, string path) {
             string jsonString = JsonConvert.SerializeObject(dirTable, Formatting.Indented);
             try {
                 File.WriteAllText(path, jsonString);
@@ -70,15 +69,28 @@ namespace DirProt {
     public class Config {
         public bool Enabled { get; set; }
         public List<string> ProtectedDir { get; set; } = new List<string>();
+        public List<string> ProtectedTaskbar { get; set; } = new List<string>();
     }
 
     public class DirTable {
         public List<DirPath> Directorys { get; set; } = new List<DirPath>();
+        public List<RegistryDir> Registries { get; set; } = new List<RegistryDir>();
     }
 
     public class DirPath {
         public string path { get; set; } = "";
         public string hash { get; set; } = "";
         public uint index { get; set; }
+    }
+
+    public class RegistryDir {
+        public string path { get; set; } = "";
+        public List<RegistryData> RegistryData { get; set; } = new List<RegistryData>();
+    }
+
+    public class RegistryData {
+        public string name { get; set; } = "";
+        public RegistryValueKind type { get; set; }
+        public Object value { get; set; }
     }
 }

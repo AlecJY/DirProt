@@ -4,7 +4,9 @@ using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 using System.Security.Cryptography;
+using System.Security.Principal;
 using System.Text;
+using Microsoft.Win32;
 
 namespace DirProt {
     class DirProt {
@@ -13,7 +15,24 @@ namespace DirProt {
 
         public DirProt(bool backup) {
             Config config = ConfigManager.LoadConfig(AppDir + "config.json");
-            List<DirPath> directorys = ConfigManager.LoadDirTable(AppDir + "data" + Path.DirectorySeparatorChar + "dirtable.json").Directorys;
+            List<string> users = new List<string>();
+            foreach (string user in config.ProtectedTaskbar) {
+                try {
+                    NTAccount account = new NTAccount(user);
+                    SecurityIdentifier securityIdentifier =
+                        (SecurityIdentifier) account.Translate(typeof(SecurityIdentifier));
+                    string sid = securityIdentifier.ToString();
+                    string homeDir = Registry.LocalMachine.OpenSubKey(
+                        @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\" + sid).GetValue("ProfileImagePath").ToString();
+                    config.ProtectedDir.Add(homeDir + @"\AppData\Roaming\Microsoft\Internet Explorer\Quick Launch\User Pinned\TaskBar");
+                    users.Add(sid);
+                } catch (Exception e) {
+                    Console.Error.WriteLine(e);
+                }
+            }
+            DirTable dirTable =
+                ConfigManager.LoadDirTable(AppDir + "data" + Path.DirectorySeparatorChar + "dirtable.json");
+            List<DirPath> directorys = dirTable.Directorys;
             if (config.Enabled || backup) {
                 foreach (string iPath in config.ProtectedDir) {
                     string path = iPath.ToLower();
@@ -23,13 +42,18 @@ namespace DirProt {
                         if (path.Equals(directory.path)) {
                             isBackuped = true;
                             backupDir = directory;
+                            break;
                         }
                     }
                     if (isBackuped) {
                         DirectoryInfo directoryInfo = new DirectoryInfo(path);
                         if (directoryInfo.Exists) {
                             foreach (FileSystemInfo childInfo in directoryInfo.GetFileSystemInfos()) {
-                                DeleteReadOnly(childInfo);
+                                try {
+                                    DeleteReadOnly(childInfo);
+                                } catch (Exception e) {
+                                    Console.WriteLine(e);
+                                }
                             }
                         }
                         CopyDirectory(AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + backupDir.hash + Path.DirectorySeparatorChar + backupDir.index, path);
@@ -37,7 +61,42 @@ namespace DirProt {
                         Backup(path, directorys);
                     }
                 }
-                ConfigManager.SaveDirectorys(directorys, AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + "dirtable.json");
+                foreach (string user in users) {
+                    bool isBackuped = false;
+                    RegistryDir reg = null;
+                    foreach (RegistryDir registryDir in dirTable.Registries) {
+                        if (registryDir.path.Equals(user + @"\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband")) {
+                            isBackuped = true;
+                            reg = registryDir;
+                            break;
+                        }
+                    }
+                    if (isBackuped) {
+                        RegistryKey taskband = Registry.Users.OpenSubKey(reg.path, true);
+                        foreach (string valueName in taskband.GetValueNames()) {
+                            taskband.DeleteValue(valueName);
+                        }
+                        foreach (RegistryData registryData in reg.RegistryData) {
+                            if (registryData.type.Equals(RegistryValueKind.Binary)) {
+                                registryData.value = Convert.FromBase64String((string) registryData.value);
+                            }
+                            taskband.SetValue(registryData.name, registryData.value, registryData.type);
+                        }
+                    } else {
+                        reg = new RegistryDir();
+                        reg.path = user + @"\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband";
+                        RegistryKey taskband = Registry.Users.OpenSubKey(reg.path);
+                        foreach (string valueName in taskband.GetValueNames()) {
+                            RegistryData regData = new RegistryData();
+                            regData.name = valueName;
+                            regData.type = taskband.GetValueKind(valueName);
+                            regData.value = taskband.GetValue(valueName);
+                            reg.RegistryData.Add(regData);
+                        }
+                        dirTable.Registries.Add(reg);
+                    }
+                }
+                ConfigManager.SaveDirTable(dirTable, AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + "dirtable.json");
             }
         }
 
@@ -100,7 +159,11 @@ namespace DirProt {
             var directoryInfo = fileSystemInfo as DirectoryInfo;
             if (directoryInfo != null && directoryInfo.Exists) {
                 foreach (FileSystemInfo childInfo in directoryInfo.GetFileSystemInfos()) {
-                    DeleteReadOnly(childInfo);
+                    try {
+                        DeleteReadOnly(childInfo);
+                    } catch (Exception e) {
+                        Console.Error.WriteLine(e);
+                    }
                 }
             }
             try {
@@ -115,9 +178,9 @@ namespace DirProt {
         static void Main(string[] args) {
             if (args.Length == 1) {
                 if (args[0].ToLower().Equals("/install")) {
-                    Process.Start("schtasks", "/Create /SC ONSTART /TN \"DirProt\" /TR \"" + Assembly.GetExecutingAssembly().Location + "\" /RU " + "SYSTEM" + " /RL HIGHEST");
+                    Process.Start("cmd", "/c schtasks /Create /SC ONSTART /TN \"DirProt\" /TR \"'" + Assembly.GetExecutingAssembly().Location + "'\" /RU " + "SYSTEM" + " /RL HIGHEST & pause");
                 } else if (args[0].ToLower().Equals("/uninstall")) {
-                    Process.Start("schtasks", "/Delete /F /TN \"Symon Client\"");
+                    Process.Start("schtasks", "/Delete /F /TN \"DirProt\"");
                 } else if (args[0].ToLower().Equals("/backup")) {
                     DirectoryInfo dataDir = new DirectoryInfo(AppDir + "data");
                     if (dataDir.Exists) {
