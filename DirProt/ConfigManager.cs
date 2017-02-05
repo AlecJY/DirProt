@@ -68,6 +68,7 @@ namespace DirProt {
 
     public class Config {
         public bool Enabled { get; set; }
+        public bool EmptyRecycleBin { get; set; }
         public List<string> ProtectedDir { get; set; } = new List<string>();
         public List<string> ProtectedTaskbar { get; set; } = new List<string>();
     }
