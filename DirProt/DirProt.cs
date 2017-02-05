@@ -101,7 +101,6 @@ namespace DirProt {
         }
 
         public void Backup(string path, List<DirPath> directorys) {
-            SHA256 sha256 = new SHA256CryptoServiceProvider();
             SHA1 sha1 = new SHA1CryptoServiceProvider();
             byte[] hashBytes = sha1.ComputeHash(Encoding.UTF8.GetBytes(path));
             string hash = BitConverter.ToString(hashBytes).Replace("-", string.Empty).ToLower();
