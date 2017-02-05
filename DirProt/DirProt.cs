@@ -175,11 +175,37 @@ namespace DirProt {
         }
 
         static void Main(string[] args) {
-            if (args.Length == 1) {
-                if (args[0].ToLower().Equals("/install")) {
+            if (args.Length > 1) {
+                if (args[0].ToLower().Equals("/install") && args.Length == 2) {
                     Process.Start("cmd", "/c schtasks /Create /SC ONSTART /TN \"DirProt\" /TR \"'" + Assembly.GetExecutingAssembly().Location + "'\" /RU " + "SYSTEM" + " /RL HIGHEST & pause");
-                } else if (args[0].ToLower().Equals("/uninstall")) {
+
+                    try {
+                        NTAccount account = new NTAccount(args[1]);
+                        SecurityIdentifier securityIdentifier =
+                            (SecurityIdentifier)account.Translate(typeof(SecurityIdentifier));
+                        string sid = securityIdentifier.ToString();
+                        RegistryKey run =
+                            Registry.Users.OpenSubKey(sid + @"\Software\Microsoft\Windows\CurrentVersion\Run", true);
+                        run.SetValue("EmptyRecycleBin", AppDir + "ERB.exe");
+                    } catch (Exception e) {
+                        Console.WriteLine(e);
+                        throw;
+                    }
+                } else if (args[0].ToLower().Equals("/uninstall") && args.Length == 2) {
                     Process.Start("schtasks", "/Delete /F /TN \"DirProt\"");
+
+                    try {
+                        NTAccount account = new NTAccount(args[1]);
+                        SecurityIdentifier securityIdentifier =
+                            (SecurityIdentifier)account.Translate(typeof(SecurityIdentifier));
+                        string sid = securityIdentifier.ToString();
+                        RegistryKey run =
+                            Registry.Users.OpenSubKey(sid + @"\Software\Microsoft\Windows\CurrentVersion\Run", true);
+                        run.DeleteValue("EmptyRecycleBin");
+                    } catch (Exception e) {
+                        Console.WriteLine(e);
+                        throw;
+                    }
                 } else if (args[0].ToLower().Equals("/backup")) {
                     DirectoryInfo dataDir = new DirectoryInfo(AppDir + "data");
                     if (dataDir.Exists) {
@@ -194,6 +220,8 @@ namespace DirProt {
                     Config config = ConfigManager.LoadConfig(AppDir + "config.json");
                     config.Enabled = false;
                     ConfigManager.SaveConfig(config, AppDir + "config.json");
+                } else {
+                    Console.Error.WriteLine("Wrong arguments");
                 }
             } else {
                 new DirProt(false);
