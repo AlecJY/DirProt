@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Configuration.Install;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -9,7 +10,7 @@ using System.Text;
 using Microsoft.Win32;
 
 namespace DirProt {
-    class DirProt {
+    public class DirProt {
         private static readonly string AppDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) +
                                          Path.DirectorySeparatorChar;
 
@@ -175,10 +176,13 @@ namespace DirProt {
         }
 
         static void Main(string[] args) {
-            if (args.Length > 1) {
+            if (args.Length > 0) {
                 if (args[0].ToLower().Equals("/install") && args.Length == 2) {
-                    Process.Start("cmd", "/c schtasks /Create /SC ONSTART /TN \"DirProt\" /TR \"'" + Assembly.GetExecutingAssembly().Location + "'\" /RU " + "SYSTEM" + " /RL HIGHEST & pause");
-
+                    try {
+                        ManagedInstallerClass.InstallHelper(new[] {AppDir + "DirProtSvc.exe"});
+                    } catch (Exception e) {
+                        Console.Error.WriteLine(e);
+                    }
                     try {
                         NTAccount account = new NTAccount(args[1]);
                         SecurityIdentifier securityIdentifier =
@@ -188,12 +192,14 @@ namespace DirProt {
                             Registry.Users.OpenSubKey(sid + @"\Software\Microsoft\Windows\CurrentVersion\Run", true);
                         run.SetValue("EmptyRecycleBin", AppDir + "ERB.exe");
                     } catch (Exception e) {
-                        Console.WriteLine(e);
-                        throw;
+                        Console.Error.WriteLine(e);
                     }
                 } else if (args[0].ToLower().Equals("/uninstall") && args.Length == 2) {
-                    Process.Start("schtasks", "/Delete /F /TN \"DirProt\"");
-
+                    try {
+                        ManagedInstallerClass.InstallHelper(new[] {"/u", AppDir + "DirProtSvc.exe"});
+                    } catch (Exception e) {
+                        Console.Error.WriteLine(e);
+                    }
                     try {
                         NTAccount account = new NTAccount(args[1]);
                         SecurityIdentifier securityIdentifier =
