@@ -7,14 +7,20 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Security.Principal;
 using System.Text;
+using System.Threading;
+using System.Windows.Forms;
+using log4net;
 using Microsoft.Win32;
 
 namespace DirProt {
     public class DirProt {
         private static readonly string AppDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location) +
                                          Path.DirectorySeparatorChar;
+        private static ILog Logger = LogManager.GetLogger(System.Reflection.MethodBase.GetCurrentMethod().DeclaringType);
 
         public DirProt(bool backup) {
+            log4net.Config.XmlConfigurator.ConfigureAndWatch(new System.IO.FileInfo(AppDir + "log.config"));
+            Logger.Info("Loading config");
             Config config = ConfigManager.LoadConfig(AppDir + "config.json");
             List<string> users = new List<string>();
             foreach (string user in config.ProtectedTaskbar) {
@@ -36,6 +42,7 @@ namespace DirProt {
             List<DirPath> directorys = dirTable.Directorys;
             if (config.Enabled || backup) {
                 foreach (string iPath in config.ProtectedDir) {
+                    Logger.Info("Checking \"" + iPath + "\" backup...");
                     string path = iPath.ToLower();
                     bool isBackuped = false;
                     DirPath backupDir = null;
@@ -47,6 +54,7 @@ namespace DirProt {
                         }
                     }
                     if (isBackuped) {
+                        Logger.Info("Start restore backup");
                         DirectoryInfo directoryInfo = new DirectoryInfo(path);
                         if (directoryInfo.Exists) {
                             foreach (FileSystemInfo childInfo in directoryInfo.GetFileSystemInfos()) {
@@ -58,11 +66,15 @@ namespace DirProt {
                             }
                         }
                         CopyDirectory(AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + backupDir.hash + Path.DirectorySeparatorChar + backupDir.index, path);
+                        Logger.Info("Successfully restore");
                     } else {
+                        Logger.Info("Start backup");
                         Backup(path, directorys);
+                        Logger.Info("Successfully backup");
                     }
                 }
                 foreach (string user in users) {
+                    Logger.Info("Checking " + user + " taskbar backup...");
                     bool isBackuped = false;
                     RegistryDir reg = null;
                     foreach (RegistryDir registryDir in dirTable.Registries) {
@@ -73,7 +85,12 @@ namespace DirProt {
                         }
                     }
                     if (isBackuped) {
+                        Logger.Info("Start restore taskbar registry...");
                         RegistryKey taskband = Registry.Users.OpenSubKey(reg.path, true);
+                        while (taskband == null) {
+                            Thread.Sleep(5000);
+                            taskband = Registry.Users.OpenSubKey(reg.path, true);
+                        }
                         foreach (string valueName in taskband.GetValueNames()) {
                             taskband.DeleteValue(valueName);
                         }
@@ -83,10 +100,16 @@ namespace DirProt {
                             }
                             taskband.SetValue(registryData.name, registryData.value, registryData.type);
                         }
+                        Logger.Info("Successfully restore taskbar");
                     } else {
+                        Logger.Info("Start backup taskbar registry...");
                         reg = new RegistryDir();
                         reg.path = user + @"\Software\Microsoft\Windows\CurrentVersion\Explorer\Taskband";
                         RegistryKey taskband = Registry.Users.OpenSubKey(reg.path);
+                        while (taskband == null) {
+                            Thread.Sleep(5000);
+                            taskband = Registry.Users.OpenSubKey(reg.path);
+                        }
                         foreach (string valueName in taskband.GetValueNames()) {
                             RegistryData regData = new RegistryData();
                             regData.name = valueName;
@@ -95,10 +118,17 @@ namespace DirProt {
                             reg.RegistryData.Add(regData);
                         }
                         dirTable.Registries.Add(reg);
+                        Logger.Info("Successfully backup taskbar");
                     }
                 }
                 ConfigManager.SaveDirTable(dirTable, AppDir + Path.DirectorySeparatorChar + "data" + Path.DirectorySeparatorChar + "dirtable.json");
+                if (backup) {
+                    MessageBox.Show("Successfully backuped.", "DirProt", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            } else {
+                Logger.Info("DirProt is disabled.");
             }
+            Environment.Exit(0);
         }
 
         public void Backup(string path, List<DirPath> directorys) {
@@ -134,6 +164,7 @@ namespace DirProt {
                         file.CopyTo(dstPath + Path.DirectorySeparatorChar + file.Name, true);
                     }
                     catch (Exception e) {
+                        Logger.Warn(e);
                         Console.Error.WriteLine(e);
                     } 
                 }
@@ -146,11 +177,13 @@ namespace DirProt {
                         CopyDirectory(directory.FullName, dstSubDir.FullName);
                     }
                     catch (Exception e) {
+                        Logger.Warn(e);
                         Console.Error.WriteLine(e);
                     }
                 }
             }
             else {
+                Logger.Error("Directory not found: " + srcPath);
                 Console.Error.WriteLine("Directory not found: " + srcPath);
             }
         }
@@ -162,6 +195,7 @@ namespace DirProt {
                     try {
                         DeleteReadOnly(childInfo);
                     } catch (Exception e) {
+                        Logger.Warn(e);
                         Console.Error.WriteLine(e);
                     }
                 }
@@ -171,6 +205,7 @@ namespace DirProt {
                 fileSystemInfo.Delete();
             }
             catch (Exception e) {
+                Logger.Warn(e);
                 Console.Error.WriteLine(e);
             }
         }
